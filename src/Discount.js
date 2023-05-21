@@ -1,10 +1,10 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 
 const Discount = () => {
     const catalog = {
-        "PEN": 20,
-        "PENCIL": 40,
-        "ERASER": 50,
+        "PRODUCT A $20": 20,
+        "PRODUCT B $40": 40,
+        "PRODUCT C $50": 50,
     };
 
     const discountRules = {
@@ -20,84 +20,65 @@ const Discount = () => {
     };
 
     const [quantities, setQuantities] = useState({});
-    const [giftWrapPreferences, setGiftWrapPreferences] = useState({});
     const [subtotal, setSubtotal] = useState(0);
-    const [discount, setDiscount] = useState({ name: "", amount: 0 });
+    const [netTotal, setNetTotal] = useState(0);
     const [shippingFee, setShippingFee] = useState(0);
     const [giftWrapFee, setGiftWrapFee] = useState(0);
-    const [total, setTotal] = useState(0);
 
-    // Calculate discount amount
-    const calculateDiscount = (subtotal) => {
-        let maxDiscount = { name: "", amount: 0 };
+    useEffect(() => {
+        calculateFees();
+    }, [subtotal]);
 
-        // Check for each discount rule
-        for (const [ruleName, rule] of Object.entries(discountRules)) {
-            const { type, amount, threshold, percentage, total_threshold, product_threshold } = rule;
-
-            if (type === "cart_total" && subtotal > threshold) {
-                maxDiscount = amount > maxDiscount.amount ? { name: ruleName, amount } : maxDiscount;
-            }
-            else if (type === "product_quantity") {
-                const exceedThreshold = Object.values(quantities).some(quantity => quantity > threshold);
-                if (exceedThreshold) {
-                    const ruleAmount = (subtotal * percentage) / 100;
-                    maxDiscount = ruleAmount > maxDiscount.amount ? { name: ruleName, amount: ruleAmount } : maxDiscount;
-                }
-            }
-            else if (type === "total_quantity" && Object.values(quantities).reduce((sum, quantity) => sum + quantity, 0) > threshold) {
-                const ruleAmount = (subtotal * percentage) / 100;
-                maxDiscount = ruleAmount > maxDiscount.amount ? { name: ruleName, amount: ruleAmount } : maxDiscount;
-            }
-            else if (type === "tiered_quantity") {
-                const totalQuantity = Object.values(quantities).reduce((sum, quantity) => sum + quantity, 0);
-                const exceedTotalThreshold = totalQuantity > total_threshold;
-                const exceedProductThreshold = Object.values(quantities).some(quantity => quantity > product_threshold);
-
-                if (exceedTotalThreshold && exceedProductThreshold) {
-                    const excessQuantity = Math.max(0, totalQuantity - total_threshold);
-                    const ruleAmount = (catalog["Product C"] * product_threshold * excessQuantity * percentage) / 100;
-                    maxDiscount = ruleAmount > maxDiscount.amount ? { name: ruleName, amount: ruleAmount } : maxDiscount;
-                }
-            }
-        }
-
-        return maxDiscount;
-    };
-
-    // Calculate fees
     const calculateFees = () => {
         const totalQuantity = Object.values(quantities).reduce((sum, quantity) => sum + quantity, 0);
         const numPackages = Math.ceil(totalQuantity / 10);
         const shippingFee = numPackages * 5;
         const giftWrapFee = totalQuantity * 1;
 
+        let netTotal = subtotal + shippingFee + giftWrapFee;
+
+        if (document.getElementsByName('flat10Discount')[0].checked && netTotal > 200) {
+            netTotal -= 10;
+        }
+
+        if (document.getElementsByName('bulk5Discount')[0].checked) {
+            const exceedingProducts = Object.keys(quantities).filter(
+                (product) => quantities[product] > 10
+            );
+
+            exceedingProducts.forEach((product) => {
+                netTotal -= catalog[product] * quantities[product] * 0.05;
+            });
+        }
+
+        if (document.getElementsByName('bulk10Discount')[0].checked && totalQuantity > 20) {
+            netTotal *= 0.9;
+        }
+
+        if (
+            document.getElementsByName('tiered50Discount')[0].checked &&
+            totalQuantity > 30
+        ) {
+            const exceedingProducts = Object.keys(quantities).filter(
+                (product) => quantities[product] > 15
+            );
+
+            exceedingProducts.forEach((product) => {
+                const quantityAbove15 = quantities[product] - 15;
+                netTotal -= catalog[product] * quantityAbove15 * 0.5;
+            });
+        }
+
+        setNetTotal(netTotal);
         setShippingFee(shippingFee);
         setGiftWrapFee(giftWrapFee);
     };
 
-    // Calculate the total
-    const calculateTotal = () => {
-        const appliedDiscount = calculateDiscount(subtotal);
-        const total = subtotal - appliedDiscount.amount + shippingFee + giftWrapFee;
-
-        setDiscount(appliedDiscount);
-        setTotal(total);
-    };
-
-    // Handle quantity change
     const handleQuantityChange = (product, quantity) => {
         const updatedQuantities = { ...quantities, [product]: quantity };
         setQuantities(updatedQuantities);
     };
 
-    // Handle gift wrap preference change
-    const handleGiftWrapPreferenceChange = (product, isGiftWrap) => {
-        const updatedGiftWrapPreferences = { ...giftWrapPreferences, [product]: isGiftWrap };
-        setGiftWrapPreferences(updatedGiftWrapPreferences);
-    };
-
-    // Handle form submission
     const handleSubmit = (event) => {
         event.preventDefault();
         const productTotals = calculateTotals();
@@ -105,7 +86,6 @@ const Discount = () => {
         calculateFees();
     };
 
-    // Calculate total amount for each product
     const calculateTotals = () => {
         const productTotals = {};
 
@@ -118,22 +98,14 @@ const Discount = () => {
 
     return (
         <div className='container text-center' style={{ marginTop: '150px' }}>
-
             <div className="row">
-
-
-                <div className=" col-lg-6 text-center border p-3 rounded  me-1">
-
-
-
-
+                <div className="col-lg-6 text-center border p-3 rounded me-1">
                     <form onSubmit={handleSubmit}>
                         <table>
                             <thead>
                                 <tr>
                                     <th>Product Name</th>
                                     <th>Quantity</th>
-                                    <th>Gift Wrap</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -142,7 +114,6 @@ const Discount = () => {
                                         <td>{product}</td>
                                         <td>
                                             <input
-
                                                 type="number"
                                                 min="0"
                                                 value={quantities[product] || ""}
@@ -151,43 +122,55 @@ const Discount = () => {
                                                 }
                                             />
                                         </td>
-                                        <td>
-                                            <input
-
-                                                type="checkbox"
-                                                checked={giftWrapPreferences[product] || false}
-                                                onChange={(e) =>
-                                                    handleGiftWrapPreferenceChange(product, e.target.checked)
-                                                }
-                                            />
-                                        </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
-                        <button class="btn btn-primary" type="submit">Calculate</button>
+                        <button className="btn btn-primary" type="submit">Calculate</button>
                     </form>
                 </div>
 
                 <div style={{ marginTop: '' }} className="col-lg-4 ms-auto p-3 rounded">
                     <div>
-                        <h1><span className="fw-bolder fs-2 text-danger">Sub Total:${subtotal}</span></h1>
-                        <h1>Discount: (${discount.amount})</h1>
-                        <p>Shipping Fee: ${shippingFee}</p>
-                        <p>Gift Wrap Fee: ${giftWrapFee}</p>
-                        <p>Total: ${subtotal}</p>
-                        <div class="d-grid gap-2">
-                            <button class="btn btn-primary"
-                                type="button">Proceed to Buy</button>
+                        <h1><span className="fw-bolder fs-2 text-danger">Sub Total: ${subtotal}</span></h1>
+
+                        <p>Shipping Fee: ${shippingFee} | Gift Wrap Fee: ${giftWrapFee}</p>
+                        <p>
+                            ( If cart total exceeds $200)
+                        </p>
+                        <h5>
+                            <input type="checkbox" name="flat10Discount" onChange={calculateFees} />
+                            Apply Flat $10 Discount
+                        </h5>
+                        <p>
+                            ( If quantity of any single product exceeds 10 units)
+                        </p>
+                        <h5>
+                            <input type="checkbox" name="bulk5Discount" onChange={calculateFees} />
+                            Apply 5% Bulk Discount
+                        </h5>
+                        <p>
+                            ( If total quantity exceeds 20 units, apply a 10% discount on the cart total.)
+                        </p>
+                        <h5>
+                            <input type="checkbox" name="bulk10Discount" onChange={calculateFees} />
+                            Apply 10% Bulk Discount
+                        </h5>
+                        <p>
+                            ( If total quantity exceeds 30 units & any single product quantity greater than 15)
+                        </p>
+                        <h5>
+                            <input type="checkbox" name="tiered50Discount" onChange={calculateFees} />
+                            Apply Tiered 50% Discount
+                        </h5>
+                        <h1>Grand Total: ${netTotal}</h1>
+                        <div className="d-grid gap-2">
+                            <button className="btn btn-primary" type="button">Proceed to Buy</button>
                         </div>
                     </div>
-
-
                 </div>
             </div>
         </div>
-
-
     );
 };
 
